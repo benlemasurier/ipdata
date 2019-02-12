@@ -1,0 +1,12 @@
+[package]
+name = "ipdata"
+version = "0.1.0"
+authors = ["Ben LeMasurier <ben.lemasurier@gmail.com>"]
+edition = "2018"
+license = "GPL-3.0"
+
+[dependencies]
+reqwest = "0.9.9"
+serde = "1.0.87"
+serde_derive = "1.0.87"
+serde_json = "1.0.38"
