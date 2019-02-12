@@ -6,200 +6,29 @@ extern crate serde;
 extern crate serde_json;
 
 use std::env;
-use std::error::Error;
-use std::fmt;
 use std::net;
+
+mod error;
+pub use error::IpDataError;
+
+mod carrier;
+pub use carrier::Carrier;
+
+mod currency;
+pub use currency::Currency;
+
+mod language;
+pub use language::Language;
+
+mod timezone;
+pub use timezone::TimeZone;
+
+mod threat;
+pub use threat::Threat;
 
 /// Default URL for ipdata.co API. This can be configured with the
 /// IPDATA_URL environment variable.
 const DEFAULT_URL: &str = "https://api.ipdata.co";
-
-#[derive(Debug)]
-pub struct IpDataError {
-    message: String,
-}
-
-impl IpDataError {
-    fn new(message: &str) -> IpDataError {
-        IpDataError {
-            message: message.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for IpDataError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for IpDataError {
-    fn description(&self) -> &str {
-        &self.message
-    }
-}
-
-impl From<reqwest::UrlError> for IpDataError {
-    fn from(err: reqwest::UrlError) -> Self {
-        IpDataError::new(err.description())
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Carrier {
-    name: String,
-    mcc: String,
-    mnc: String,
-}
-
-impl Carrier {
-    /// Returns the mobile carrier's name, if available.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    /// Returns the mobile carrier's country code, if available.
-    pub fn mcc(&self) -> &String {
-        &self.mcc
-    }
-
-    /// Returns the mobile carrier's network code, if available.
-    pub fn mnc(&self) -> &String {
-        &self.mnc
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Currency {
-    name: String,
-    code: String,
-    symbol: String,
-    native: String,
-    plural: String,
-}
-
-impl Currency {
-    /// Returns the name of the currency.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    /// Returns the ISO 4217 currency code.
-    pub fn code(&self) -> &String {
-        &self.code
-    }
-
-    /// Returns the currency's symbol.
-    pub fn symbol(&self) -> &String {
-        &self.symbol
-    }
-
-    /// Returns the native name of the currency.
-    pub fn native(&self) -> &String {
-        &self.native
-    }
-
-    /// Returns the plural version of the currency. For example, US dollars,
-    /// Australian dollars, Euros.
-    pub fn plural(&self) -> &String {
-        &self.plural
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Language {
-    name: String,
-    native: String,
-}
-
-impl Language {
-    /// Returns the IP location's language, in english.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    /// Returns the IP location's native language name.
-    pub fn native(&self) -> &String {
-        &self.native
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct TimeZone {
-    name: String,
-    abbr: String,
-    offset: String,
-    // FIXME: the remote API will send an empty string if the value
-    // is unknown. This breaks the serde_json type marshal.
-    // is_dst: bool,
-}
-
-impl TimeZone {
-    /// Returns the time zone's name.
-    pub fn name(&self) -> &String {
-        &self.name
-    }
-
-    /// Returns the time zone's abbreviation, e.g., MST.
-    pub fn abbr(&self) -> &String {
-        &self.abbr
-    }
-
-    /// Returns UTC offset of the Timezone, e.g., "-0700".
-    pub fn offset(&self) -> &String {
-        &self.offset
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Threat {
-    is_tor: bool,
-    is_proxy: bool,
-    is_anonymous: bool,
-    is_known_attacker: bool,
-    is_known_abuser: bool,
-    is_threat: bool,
-    is_bogon: bool,
-}
-
-impl Threat {
-    /// Returns true if the IP address s a known Tor exit node or relay.
-    pub fn is_tor(&self) -> bool {
-        self.is_tor
-    }
-
-    /// Returns true if the IP is a known proxy of any type.
-    pub fn is_proxy(&self) -> bool {
-        self.is_proxy
-    }
-
-    /// Returns true if is_tor or is_proxy is true
-    pub fn is_anonymous(&self) -> bool {
-        self.is_anonymous
-    }
-
-    /// Returns true if the IP is a known (reported) source
-    /// of malicious activity.
-    pub fn is_known_attacker(&self) -> bool {
-        self.is_known_attacker
-    }
-
-    /// Returns true if the IP s a known (reported) source of abuse.
-    pub fn is_known_abuser(&self) -> bool {
-        self.is_known_abuser
-    }
-
-    /// Returns true if is_known_abuser or is_known_attacker is true.
-    pub fn is_threat(&self) -> bool {
-        self.is_threat
-    }
-
-    /// Returns true if the ip address is a Bogon, i.e.,
-    /// an unassigned, unaddressable IP address.
-    pub fn is_bogon(&self) -> bool {
-        self.is_bogon
-    }
-}
 
 #[derive(Deserialize, Debug)]
 pub struct IpData {
@@ -365,23 +194,23 @@ struct ResponseError {
     message: String,
 }
 
-/// Performs a lookup of the provided IpAddr. If no address is provided, the
-/// request IP as seen by the remote ipdata.co server is used.
+/// Performs a lookup of the provided IpAddr.
 ///
 /// # Examples
 ///
 /// ```
-/// # use std::error::Error;
+/// # extern crate ipdata;
 /// #
-/// # fn main() -> Result<IpData, Error> {
-/// your;
-/// example?;
-/// code;
+/// # use std::env;
+/// # use std::net;
 /// #
-/// #     Ok(())
+/// # fn main() {
+///      let ip = net::Ipv4Addr::new(1,1,1,1);
+///      let resp = ipdata::lookup(net::IpAddr::V4(ip));
+///      println!("{}, {}", resp.latitude(), resp.longitude());
 /// # }
 /// ```
-pub fn lookup(addr: Option<net::IpAddr>) -> Result<IpData, IpDataError> {
+pub fn lookup(addr: net::IpAddr) -> Result<IpData, IpDataError> {
     let mut url = api_endpoint(addr)?;
 
     match api_key() {
@@ -428,19 +257,15 @@ fn request_error(err: reqwest::Error) -> IpDataError {
     }
 }
 
-fn api_endpoint(addr: Option<net::IpAddr>) -> Result<reqwest::Url, IpDataError> {
+fn api_endpoint(addr: net::IpAddr) -> Result<reqwest::Url, reqwest::UrlError> {
     let url = match env::var("IPDATA_URL") {
         Ok(url) => url,
         Err(_) => DEFAULT_URL.to_string(),
     };
 
-    let mut url = reqwest::Url::parse(url.as_str())?;
+    let url = reqwest::Url::parse(url.as_str())?;
 
-    if let Some(addr) = addr {
-        url = url.join(format!("{}", addr).as_str())?;
-    }
-
-    Ok(url)
+    url.join(format!("{}", addr).as_str())
 }
 
 fn api_key() -> Option<String> {
