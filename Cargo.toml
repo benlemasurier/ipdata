@@ -1,9 +1,13 @@
 [package]
 name = "ipdata"
+description = "ipdata.co api client"
 version = "0.1.0"
 authors = ["Ben LeMasurier <ben.lemasurier@gmail.com>"]
 edition = "2018"
 license = "GPL-3.0"
+license-file = "LICENSE"
+homepage = "https://github.com/benlemasurier/ipdata"
+repository = "https://github.com/benlemasurier/ipdata"
 
 [dependencies]
 reqwest = "0.9.9"
